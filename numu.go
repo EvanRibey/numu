@@ -1,0 +1,3 @@
+package numu
+
+func main() {}
