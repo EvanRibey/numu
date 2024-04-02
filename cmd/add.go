@@ -36,12 +36,14 @@ var (
 			}
 
 			componentFile, fileErr := os.Create(target + componentName + ".jsx")
-			className := []rune(featureFolderName + "-")
+			defer componentFile.Close()
 
 			if fileErr != nil {
 				fmt.Println("An error occurred when creating the file. Please try again.")
 				return
 			}
+
+			className := []rune(featureFolderName + "-")
 
 			for index, r := range componentName {
 				if r >= 'A' && r <= 'Z' && index > 0 {
@@ -66,8 +68,6 @@ var (
 				"componentName": componentName,
 				"className":     string(className),
 			})
-
-			componentFile.Close()
 
 			fmt.Println("New component created.")
 		},
