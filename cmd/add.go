@@ -11,6 +11,7 @@ import (
 
 var (
 	featureFolderName string
+	createCSS         bool
 
 	addCmd = &cobra.Command{
 		Use:   "add",
@@ -24,18 +25,19 @@ var (
 
 			componentName := args[0]
 			target := "./src/features/" + featureFolderName + "/"
+			componentTarget := target + componentName + ".jsx"
 
 			if _, err := os.Stat(target); err != nil {
 				fmt.Println("Could not open feature folder. Does it exist?")
 				return
 			}
 
-			if _, err := os.Stat(target + componentName + ".jsx"); err == nil {
+			if _, err := os.Stat(componentTarget); err == nil {
 				fmt.Println("Component already exists. Consider a different name?")
 				return
 			}
 
-			componentFile, fileErr := os.Create(target + componentName + ".jsx")
+			componentFile, fileErr := os.Create(componentTarget)
 			defer componentFile.Close()
 
 			if fileErr != nil {
@@ -53,9 +55,11 @@ var (
 				}
 			}
 
-			reactTemplate, templateErr := template.New("reactComponent").Parse(`export function {{.componentName}}(props) {
+			reactTemplate, templateErr := template.New("reactComponent").Parse(`{{if .includeCSS}}import './{{.componentName}}.css';
+
+{{end}}export function {{.componentName}}(props) {
   return (
-    <div className="{{.className}}">
+    <div{{if .includeCSS}} className="{{.className}}"{{end}}>
     </div>
   );
 }`)
@@ -67,7 +71,30 @@ var (
 			reactTemplate.Execute(componentFile, map[string]interface{}{
 				"componentName": componentName,
 				"className":     string(className),
+				"includeCSS":    createCSS,
 			})
+
+			if createCSS == true {
+				cssFile, cssFileErr := os.Create(target + componentName + ".css")
+				defer cssFile.Close()
+
+				if cssFileErr != nil {
+					fmt.Println("An error occurred when creating the file. Please try again.")
+					return
+				}
+
+				cssTemplate, cssTemplateErr := template.New("cssModule").Parse(`.{{.className}} {
+  /* class properties go here */
+}`)
+
+				if cssTemplateErr != nil {
+					panic(templateErr)
+				}
+
+				cssTemplate.Execute(cssFile, map[string]interface{}{
+					"className": string(className),
+				})
+			}
 
 			fmt.Println("New component created.")
 		},
@@ -78,4 +105,5 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.PersistentFlags().StringVarP(&featureFolderName, "feature", "f", "", "feature folder name (located within \"src/features/*\")")
 	addCmd.MarkFlagRequired("feature")
+	addCmd.PersistentFlags().BoolVarP(&createCSS, "css", "c", false, "create an associated CSS file")
 }
