@@ -96,6 +96,22 @@ var (
 				})
 			}
 
+			if indexFileInfo, indexErr := os.Stat(target + "index.js"); indexErr == nil {
+				indexFile, indexFileErr := os.OpenFile(target+"index.js", os.O_APPEND|os.O_WRONLY, 644)
+				defer indexFile.Close()
+
+				if indexFileErr != nil {
+					fmt.Println("An error occurred when creating the file. Please try again.")
+					return
+				}
+
+				if indexFileInfo.Size() == 0 {
+					indexFile.Write([]byte("import './" + componentName + ".jsx';"))
+				} else {
+					indexFile.Write([]byte("\nimport './" + componentName + ".jsx';"))
+				}
+			}
+
 			fmt.Println("New component created.")
 		},
 	}
