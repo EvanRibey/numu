@@ -16,8 +16,9 @@ func logFatal(logString string, logError error) {
 }
 
 var (
-	featureFolderName string
 	createCSS         bool
+	featureFolderName string
+	typescript        bool
 
 	addCmd = &cobra.Command{
 		Use:   "add",
@@ -30,8 +31,13 @@ var (
 			}
 
 			componentName := args[0]
+			extension := ".jsx"
 			target := "./src/features/" + featureFolderName + "/"
-			componentTarget := target + componentName + ".jsx"
+			if typescript == true {
+				extension = ".tsx"
+			}
+
+			componentTarget := target + componentName + extension
 
 			if _, err := os.Stat(target); err != nil {
 				fmt.Println("Could not open feature folder. Does it exist?")
@@ -52,6 +58,7 @@ var (
 			}
 
 			className := []rune(featureFolderName + "-")
+			propsName := "props"
 
 			for index, r := range componentName {
 				if r >= 'A' && r <= 'Z' && index > 0 {
@@ -61,9 +68,14 @@ var (
 				}
 			}
 
-			reactTemplate, err := template.New("reactComponent").Parse(`{{if .includeCSS}}import './{{.componentName}}.css';
+			if typescript == true {
+				propsName = componentName + "Props"
+			}
 
-{{end}}export function {{.componentName}}(props) {
+			reactTemplate, err := template.New("reactComponent").Parse(`{{if .includePropImport}}import { {{.propsName}} } from './types';
+{{end}}{{if .includeCSS}}import './{{.componentName}}.css';{{end}}{{if .spacing}}
+
+{{end}}export function {{.componentName}}({{if .includePropImport}}props: {{end}}{{.propsName}}) {
   return (
     <div{{if .includeCSS}} className="{{.className}}"{{end}}>
     </div>
@@ -76,9 +88,12 @@ var (
 			}
 
 			err = reactTemplate.Execute(componentFile, map[string]interface{}{
-				"componentName": componentName,
-				"className":     string(className),
-				"includeCSS":    createCSS,
+				"componentName":     componentName,
+				"className":         string(className),
+				"includeCSS":        createCSS,
+				"includePropImport": typescript,
+				"spacing":           typescript || createCSS,
+				"propsName":         propsName,
 			})
 
 			if err != nil {
@@ -114,8 +129,13 @@ var (
 				}
 			}
 
-			if indexFileInfo, indexErr := os.Stat(target + "index.js"); indexErr == nil {
-				indexFile, err := os.OpenFile(target+"index.js", os.O_APPEND|os.O_WRONLY, 644)
+			indexTarget := target + "index.js"
+			if typescript == true {
+				indexTarget = target + "index.ts"
+			}
+
+			if indexFileInfo, err := os.Stat(indexTarget); err == nil {
+				indexFile, err := os.OpenFile(indexTarget, os.O_APPEND|os.O_WRONLY, 644)
 				defer indexFile.Close()
 
 				if err != nil {
@@ -135,6 +155,36 @@ var (
 				}
 			}
 
+			if typesFileInfo, err := os.Stat(target + "types.ts"); err == nil && typescript == true {
+				typesFile, err := os.OpenFile(target+"types.ts", os.O_APPEND|os.O_WRONLY, 644)
+				defer typesFile.Close()
+
+				if err != nil {
+					logFatal("Could not open index file. Aborting.", err)
+					return
+				}
+
+				exportString, err := template.New("interfaceString").Parse(`{{if .notEmpty}}
+{{end}}export interface {{.interfaceName}} {
+  // properties go here
+}`)
+
+				if err != nil {
+					logFatal("Could not create export string template. Aborting.", err)
+					return
+				}
+
+				err = exportString.Execute(typesFile, map[string]interface{}{
+					"interfaceName": propsName,
+					"notEmpty":      typesFileInfo.Size() != 0,
+				})
+
+				if err != nil {
+					logFatal("Could not write to index file. Aborting.", err)
+					return
+				}
+			}
+
 			fmt.Println("New component created.")
 		},
 	}
@@ -145,4 +195,5 @@ func init() {
 	addCmd.PersistentFlags().StringVarP(&featureFolderName, "feature", "f", "", "feature folder name (located within \"src/features/*\")")
 	addCmd.MarkFlagRequired("feature")
 	addCmd.PersistentFlags().BoolVarP(&createCSS, "css", "c", false, "create an associated CSS file")
+	addCmd.PersistentFlags().BoolVarP(&typescript, "typescript", "t", false, "the repository uses TypeScript")
 }
