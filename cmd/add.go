@@ -2,12 +2,18 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"text/template"
 	"unicode"
 
 	"github.com/spf13/cobra"
 )
+
+func logFatal(logString string, logError error) {
+	log.Fatal(logString, logError)
+	fmt.Println("An error occurred when creating the file. Please try again.")
+}
 
 var (
 	featureFolderName string
@@ -37,11 +43,11 @@ var (
 				return
 			}
 
-			componentFile, fileErr := os.Create(componentTarget)
+			componentFile, err := os.Create(componentTarget)
 			defer componentFile.Close()
 
-			if fileErr != nil {
-				fmt.Println("An error occurred when creating the file. Please try again.")
+			if err != nil {
+				logFatal("Could not create component file:"+componentName+".jsx. Aborting.", err)
 				return
 			}
 
@@ -55,7 +61,7 @@ var (
 				}
 			}
 
-			reactTemplate, templateErr := template.New("reactComponent").Parse(`{{if .includeCSS}}import './{{.componentName}}.css';
+			reactTemplate, err := template.New("reactComponent").Parse(`{{if .includeCSS}}import './{{.componentName}}.css';
 
 {{end}}export function {{.componentName}}(props) {
   return (
@@ -64,51 +70,68 @@ var (
   );
 }`)
 
-			if templateErr != nil {
-				panic(templateErr)
+			if err != nil {
+				logFatal("Could not create component template. Aborting.", err)
+				return
 			}
 
-			reactTemplate.Execute(componentFile, map[string]interface{}{
+			err = reactTemplate.Execute(componentFile, map[string]interface{}{
 				"componentName": componentName,
 				"className":     string(className),
 				"includeCSS":    createCSS,
 			})
 
+			if err != nil {
+				logFatal("Could not execute component template. Aborting.", err)
+				return
+			}
+
 			if createCSS == true {
-				cssFile, cssFileErr := os.Create(target + componentName + ".css")
+				cssFile, err := os.Create(target + componentName + ".css")
 				defer cssFile.Close()
 
-				if cssFileErr != nil {
-					fmt.Println("An error occurred when creating the file. Please try again.")
+				if err != nil {
+					logFatal("Could not create associated CSS file. Aborting.", err)
 					return
 				}
 
-				cssTemplate, cssTemplateErr := template.New("cssModule").Parse(`.{{.className}} {
+				cssTemplate, err := template.New("cssModule").Parse(`.{{.className}} {
   /* class properties go here */
 }`)
 
-				if cssTemplateErr != nil {
-					panic(templateErr)
+				if err != nil {
+					logFatal("Could not create CSS template string. Aborting.", err)
+					return
 				}
 
-				cssTemplate.Execute(cssFile, map[string]interface{}{
+				err = cssTemplate.Execute(cssFile, map[string]interface{}{
 					"className": string(className),
 				})
+
+				if err != nil {
+					logFatal("Could not execute CSS template string. Aborting.", err)
+					return
+				}
 			}
 
 			if indexFileInfo, indexErr := os.Stat(target + "index.js"); indexErr == nil {
-				indexFile, indexFileErr := os.OpenFile(target+"index.js", os.O_APPEND|os.O_WRONLY, 644)
+				indexFile, err := os.OpenFile(target+"index.js", os.O_APPEND|os.O_WRONLY, 644)
 				defer indexFile.Close()
 
-				if indexFileErr != nil {
-					fmt.Println("An error occurred when creating the file. Please try again.")
+				if err != nil {
+					logFatal("Could not open index file. Aborting.", err)
 					return
 				}
 
 				if indexFileInfo.Size() == 0 {
-					indexFile.Write([]byte("import './" + componentName + ".jsx';"))
+					_, err = indexFile.Write([]byte("import './" + componentName + ".jsx';"))
 				} else {
-					indexFile.Write([]byte("\nimport './" + componentName + ".jsx';"))
+					_, err = indexFile.Write([]byte("\nimport './" + componentName + ".jsx';"))
+				}
+
+				if err != nil {
+					logFatal("Could not write to index file. Aborting.", err)
+					return
 				}
 			}
 
