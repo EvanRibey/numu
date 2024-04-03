@@ -124,9 +124,9 @@ var (
 				}
 
 				if indexFileInfo.Size() == 0 {
-					_, err = indexFile.Write([]byte("import './" + componentName + ".jsx';"))
+					_, err = indexFile.Write([]byte("import './" + componentName + "';"))
 				} else {
-					_, err = indexFile.Write([]byte("\nimport './" + componentName + ".jsx';"))
+					_, err = indexFile.Write([]byte("\nimport './" + componentName + "';"))
 				}
 
 				if err != nil {
